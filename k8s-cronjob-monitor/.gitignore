@@ -5,6 +5,7 @@ operator
 # Test artifacts
 cover.out
 coverage.html
+testbin/
 
 # IDE
 .idea/

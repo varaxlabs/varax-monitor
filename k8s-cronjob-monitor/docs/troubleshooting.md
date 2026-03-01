@@ -15,7 +15,7 @@
    Check the pod is in `Running` state.
 
 2. **Prometheus not scraping**
-   - Check Prometheus targets: Status → Targets
+   - Check Prometheus targets: Status > Targets
    - Look for `k8s-cronjob-monitor` target
    - If missing, check ServiceMonitor or scrape config
 
@@ -31,7 +31,9 @@
    ```
    Look for permission errors.
 
-### CronJob Failed Alert
+### CronJob Failed
+
+**Alert:** `CronJobFailed` (severity: warning)
 
 **Runbook:**
 
@@ -57,32 +59,9 @@
    - Command/script errors
    - Missing secrets/configmaps
 
-### CronJob Not Running Alert
+### Missed Schedule
 
-**Runbook:**
-
-1. Check if CronJob is suspended:
-   ```bash
-   kubectl get cronjob <name> -n <namespace> -o jsonpath='{.spec.suspend}'
-   ```
-
-2. Check concurrency policy:
-   ```bash
-   kubectl get cronjob <name> -n <namespace> -o jsonpath='{.spec.concurrencyPolicy}'
-   ```
-   If `Forbid`, a running job may block new ones.
-
-3. Check starting deadline:
-   ```bash
-   kubectl get cronjob <name> -n <namespace> -o jsonpath='{.spec.startingDeadlineSeconds}'
-   ```
-
-4. Check cluster resources:
-   ```bash
-   kubectl describe nodes | grep -A 5 "Allocated resources"
-   ```
-
-### Missed Schedule Alert
+**Alert:** `CronJobMissedSchedule` (severity: warning)
 
 **Runbook:**
 
@@ -104,7 +83,39 @@
      startingDeadlineSeconds: 300
    ```
 
-### Low Success Rate Alert
+### Slow Execution
+
+**Alert:** `CronJobSlowExecution` (severity: warning)
+
+**Runbook:**
+
+1. Check current execution duration:
+   ```promql
+   cronjob_monitor_execution_duration_seconds{cronjob="<name>"}
+   ```
+
+2. Common causes:
+   - Increased data volume
+   - External service slowdown
+   - Resource contention
+   - Network issues
+
+3. Check Pod resource usage:
+   ```bash
+   kubectl top pod -n <namespace> | grep <cronjob-name>
+   ```
+
+4. Consider setting `activeDeadlineSeconds`:
+   ```yaml
+   spec:
+     jobTemplate:
+       spec:
+         activeDeadlineSeconds: 3600
+   ```
+
+### Low Success Rate
+
+**Alert:** `CronJobLowSuccessRate` (severity: critical)
 
 **Runbook:**
 
@@ -125,49 +136,36 @@
    - Resource-based (memory/CPU spikes)
    - External dependency failures
 
-### Slow Execution Alert
+### No Recent Success
+
+**Alert:** `CronJobNoRecentSuccess` (severity: critical)
 
 **Runbook:**
 
-1. Check current vs historical duration:
+1. Check if CronJob is suspended:
+   ```bash
+   kubectl get cronjob <name> -n <namespace> -o jsonpath='{.spec.suspend}'
+   ```
+
+2. Check concurrency policy:
+   ```bash
+   kubectl get cronjob <name> -n <namespace> -o jsonpath='{.spec.concurrencyPolicy}'
+   ```
+   If `Forbid`, a running job may block new ones.
+
+3. Check last schedule time:
    ```promql
-   cronjob_monitor_execution_duration_seconds{cronjob="<name>"}
-   avg_over_time(cronjob_monitor_execution_duration_seconds{cronjob="<name>"}[7d])
+   cronjob_monitor_last_success_timestamp{cronjob="<name>"}
    ```
 
-2. Common causes:
-   - Increased data volume
-   - External service slowdown
-   - Resource contention
-   - Network issues
+4. Check for missed schedules:
+   ```promql
+   increase(cronjob_monitor_missed_schedules_total{cronjob="<name>"}[24h])
+   ```
 
-3. Check Pod resource usage:
+5. Check cluster resources:
    ```bash
-   kubectl top pod -n <namespace> | grep <cronjob-name>
-   ```
-
-### Running Too Long Alert
-
-**Runbook:**
-
-1. Check if job is stuck:
-   ```bash
-   kubectl get jobs -n <namespace> | grep <cronjob-name>
-   kubectl describe job <job-name> -n <namespace>
-   ```
-
-2. Check Pod status:
-   ```bash
-   kubectl get pods -n <namespace> -l job-name=<job-name>
-   kubectl describe pod <pod-name> -n <namespace>
-   ```
-
-3. Consider setting `activeDeadlineSeconds`:
-   ```yaml
-   spec:
-     jobTemplate:
-       spec:
-         activeDeadlineSeconds: 3600
+   kubectl describe nodes | grep -A 5 "Allocated resources"
    ```
 
 ## Debug Mode
@@ -177,11 +175,6 @@ Enable debug logging for more verbose output:
 ```bash
 helm upgrade k8s-cronjob-monitor ./deploy/helm/k8s-cronjob-monitor \
   --set logging.level=debug
-```
-
-Or set environment variable:
-```bash
-kubectl set env deployment/k8s-cronjob-monitor LOG_LEVEL=debug -n monitoring
 ```
 
 ## Getting Help

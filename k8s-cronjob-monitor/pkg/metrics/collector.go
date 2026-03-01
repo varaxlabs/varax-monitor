@@ -2,14 +2,16 @@ package metrics
 
 import (
 	"sync"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/kubeshield/k8s-cronjob-monitor/pkg/models"
 )
 
-// Collector holds all Prometheus metrics for CronJob monitoring
+// Collector holds all Prometheus metrics for CronJob monitoring.
 type Collector struct {
+	Registry *prometheus.Registry
+
 	// Gauges
 	executionStatus   *prometheus.GaugeVec
 	executionDuration *prometheus.GaugeVec
@@ -20,24 +22,33 @@ type Collector struct {
 	successRate       *prometheus.GaugeVec
 	scheduleDelay     *prometheus.GaugeVec
 
+	// Info gauge
+	info *prometheus.GaugeVec
+
 	// Counters
 	executionsTotal *prometheus.CounterVec
 	missedSchedules *prometheus.CounterVec
 
-	// Internal tracking for success rate calculation
-	successCounts map[string]int64
-	failureCounts map[string]int64
-	countsMu      sync.RWMutex
+	// Internal tracking for counter idempotency
+	lastKnownSuccess map[string]int64
+	lastKnownFailure map[string]int64
+	mu               sync.Mutex
 }
 
-// NewCollector creates a new metrics collector with all Prometheus metrics registered
+// NewCollector creates a new metrics collector with an isolated registry.
 func NewCollector() *Collector {
+	return NewCollectorWithRegistry(prometheus.NewRegistry())
+}
+
+// NewCollectorWithRegistry creates a new metrics collector with the given registry.
+func NewCollectorWithRegistry(reg *prometheus.Registry) *Collector {
 	c := &Collector{
-		successCounts: make(map[string]int64),
-		failureCounts: make(map[string]int64),
+		Registry:         reg,
+		lastKnownSuccess: make(map[string]int64),
+		lastKnownFailure: make(map[string]int64),
 	}
 
-	c.executionStatus = promauto.NewGaugeVec(
+	c.executionStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "cronjob_monitor_execution_status",
 			Help: "Current status of last CronJob execution (1=success, 0=failed, -1=unknown)",
@@ -45,7 +56,7 @@ func NewCollector() *Collector {
 		[]string{"namespace", "cronjob"},
 	)
 
-	c.executionDuration = promauto.NewGaugeVec(
+	c.executionDuration = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "cronjob_monitor_execution_duration_seconds",
 			Help: "Duration of last CronJob execution in seconds",
@@ -53,15 +64,7 @@ func NewCollector() *Collector {
 		[]string{"namespace", "cronjob"},
 	)
 
-	c.executionsTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "cronjob_monitor_executions_total",
-			Help: "Total number of CronJob executions",
-		},
-		[]string{"namespace", "cronjob", "status"},
-	)
-
-	c.lastSuccessTime = promauto.NewGaugeVec(
+	c.lastSuccessTime = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "cronjob_monitor_last_success_timestamp",
 			Help: "Timestamp of last successful execution",
@@ -69,7 +72,7 @@ func NewCollector() *Collector {
 		[]string{"namespace", "cronjob"},
 	)
 
-	c.lastFailureTime = promauto.NewGaugeVec(
+	c.lastFailureTime = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "cronjob_monitor_last_failure_timestamp",
 			Help: "Timestamp of last failed execution",
@@ -77,7 +80,7 @@ func NewCollector() *Collector {
 		[]string{"namespace", "cronjob"},
 	)
 
-	c.nextScheduleTime = promauto.NewGaugeVec(
+	c.nextScheduleTime = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "cronjob_monitor_next_schedule_timestamp",
 			Help: "Expected timestamp of next execution",
@@ -85,15 +88,7 @@ func NewCollector() *Collector {
 		[]string{"namespace", "cronjob"},
 	)
 
-	c.missedSchedules = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "cronjob_monitor_missed_schedules_total",
-			Help: "Total number of missed schedules",
-		},
-		[]string{"namespace", "cronjob"},
-	)
-
-	c.activeJobs = promauto.NewGaugeVec(
+	c.activeJobs = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "cronjob_monitor_active_jobs",
 			Help: "Current number of active Job pods",
@@ -101,7 +96,7 @@ func NewCollector() *Collector {
 		[]string{"namespace", "cronjob"},
 	)
 
-	c.successRate = promauto.NewGaugeVec(
+	c.successRate = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "cronjob_monitor_success_rate",
 			Help: "Success rate (successful / total) over last 24 hours",
@@ -109,7 +104,7 @@ func NewCollector() *Collector {
 		[]string{"namespace", "cronjob"},
 	)
 
-	c.scheduleDelay = promauto.NewGaugeVec(
+	c.scheduleDelay = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "cronjob_monitor_schedule_delay_seconds",
 			Help: "Difference between scheduled and actual start time",
@@ -117,22 +112,138 @@ func NewCollector() *Collector {
 		[]string{"namespace", "cronjob"},
 	)
 
+	c.info = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "cronjob_monitor_info",
+			Help: "CronJob metadata information",
+		},
+		[]string{"namespace", "cronjob", "schedule", "suspended"},
+	)
+
+	c.executionsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cronjob_monitor_executions_total",
+			Help: "Total number of CronJob executions",
+		},
+		[]string{"namespace", "cronjob", "status"},
+	)
+
+	c.missedSchedules = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cronjob_monitor_missed_schedules_total",
+			Help: "Total number of missed schedules",
+		},
+		[]string{"namespace", "cronjob"},
+	)
+
+	reg.MustRegister(
+		c.executionStatus,
+		c.executionDuration,
+		c.lastSuccessTime,
+		c.lastFailureTime,
+		c.nextScheduleTime,
+		c.activeJobs,
+		c.successRate,
+		c.scheduleDelay,
+		c.info,
+		c.executionsTotal,
+		c.missedSchedules,
+	)
+
 	return c
 }
 
-// InitializeCronJob sets initial metrics when a CronJob is discovered
-func (c *Collector) InitializeCronJob(namespace, name string) {
-	// Set unknown status initially
-	c.executionStatus.WithLabelValues(namespace, name).Set(-1)
-	c.activeJobs.WithLabelValues(namespace, name).Set(0)
-
-	// Initialize counters (they need to exist for queries to work)
-	c.executionsTotal.WithLabelValues(namespace, name, "success")
-	c.executionsTotal.WithLabelValues(namespace, name, "failed")
-	c.missedSchedules.WithLabelValues(namespace, name)
+// SetInfo sets the info metric for a CronJob.
+func (c *Collector) SetInfo(namespace, name, schedule string, suspended bool) {
+	suspendedStr := "false"
+	if suspended {
+		suspendedStr = "true"
+	}
+	// Delete any previous info labels for this CronJob (schedule/suspended may change)
+	c.info.DeletePartialMatch(prometheus.Labels{"namespace": namespace, "cronjob": name})
+	c.info.WithLabelValues(namespace, name, schedule, suspendedStr).Set(1)
 }
 
-// RemoveCronJob cleans up metrics when a CronJob is deleted
+// UpdateAll sets all metrics from a CronJobStatus.
+func (c *Collector) UpdateAll(status *models.CronJobStatus) {
+	ns, name := status.Namespace, status.Name
+
+	c.executionStatus.WithLabelValues(ns, name).Set(status.LastExecStatus)
+	c.executionDuration.WithLabelValues(ns, name).Set(status.LastExecDuration)
+	c.lastSuccessTime.WithLabelValues(ns, name).Set(status.LastSuccessTime)
+	c.lastFailureTime.WithLabelValues(ns, name).Set(status.LastFailureTime)
+	c.activeJobs.WithLabelValues(ns, name).Set(float64(status.ActiveJobCount))
+	c.scheduleDelay.WithLabelValues(ns, name).Set(status.ScheduleDelay)
+
+	// Counter idempotency: only increment by the delta
+	c.mu.Lock()
+	key := ns + "/" + name
+
+	prevSuccess := c.lastKnownSuccess[key]
+	if status.SuccessCount > prevSuccess {
+		c.executionsTotal.WithLabelValues(ns, name, "success").Add(float64(status.SuccessCount - prevSuccess))
+		c.lastKnownSuccess[key] = status.SuccessCount
+	}
+
+	prevFailure := c.lastKnownFailure[key]
+	if status.FailureCount > prevFailure {
+		c.executionsTotal.WithLabelValues(ns, name, "failed").Add(float64(status.FailureCount - prevFailure))
+		c.lastKnownFailure[key] = status.FailureCount
+	}
+	c.mu.Unlock()
+
+	// Success rate
+	total := status.SuccessCount + status.FailureCount
+	if total == 0 {
+		c.successRate.WithLabelValues(ns, name).Set(1.0)
+	} else {
+		c.successRate.WithLabelValues(ns, name).Set(float64(status.SuccessCount) / float64(total))
+	}
+
+	// Info metric
+	c.SetInfo(ns, name, status.Schedule, status.Suspended)
+}
+
+// UpdateNextSchedule updates the next expected run timestamp.
+func (c *Collector) UpdateNextSchedule(namespace, cronjob string, timestamp int64) {
+	c.nextScheduleTime.WithLabelValues(namespace, cronjob).Set(float64(timestamp))
+}
+
+// RecordMissedSchedule increments the missed schedule counter.
+func (c *Collector) RecordMissedSchedule(namespace, cronjob string) {
+	c.missedSchedules.WithLabelValues(namespace, cronjob).Inc()
+}
+
+// RegisterWithPrometheus registers all metric collectors with the default prometheus registry.
+// This is used when integrating with controller-runtime's built-in metrics server.
+func (c *Collector) RegisterWithPrometheus() {
+	prometheus.MustRegister(
+		c.executionStatus,
+		c.executionDuration,
+		c.lastSuccessTime,
+		c.lastFailureTime,
+		c.nextScheduleTime,
+		c.activeJobs,
+		c.successRate,
+		c.scheduleDelay,
+		c.info,
+		c.executionsTotal,
+		c.missedSchedules,
+	)
+}
+
+// TestStatus creates a minimal CronJobStatus for testing.
+func TestStatus(namespace, name string) models.CronJobStatus {
+	return models.CronJobStatus{
+		Namespace:      namespace,
+		Name:           name,
+		Schedule:       "*/5 * * * *",
+		LastExecStatus: 1,
+		SuccessCount:   1,
+	}
+}
+
+// RemoveCronJob cleans up all metrics when a CronJob is deleted.
 func (c *Collector) RemoveCronJob(namespace, name string) {
 	labels := prometheus.Labels{"namespace": namespace, "cronjob": name}
 
@@ -145,86 +256,15 @@ func (c *Collector) RemoveCronJob(namespace, name string) {
 	c.successRate.Delete(labels)
 	c.scheduleDelay.Delete(labels)
 
-	// Delete counter labels
+	c.info.DeletePartialMatch(labels)
+
 	c.executionsTotal.Delete(prometheus.Labels{"namespace": namespace, "cronjob": name, "status": "success"})
 	c.executionsTotal.Delete(prometheus.Labels{"namespace": namespace, "cronjob": name, "status": "failed"})
 	c.missedSchedules.Delete(labels)
 
-	// Clean up internal tracking
-	c.countsMu.Lock()
+	c.mu.Lock()
 	key := namespace + "/" + name
-	delete(c.successCounts, key)
-	delete(c.failureCounts, key)
-	c.countsMu.Unlock()
-}
-
-// RecordJobStart records when a job starts
-func (c *Collector) RecordJobStart(namespace, cronjob string, activeCount int) {
-	c.activeJobs.WithLabelValues(namespace, cronjob).Set(float64(activeCount))
-}
-
-// RecordSuccess records a successful job execution
-func (c *Collector) RecordSuccess(namespace, cronjob string, duration float64) {
-	c.executionStatus.WithLabelValues(namespace, cronjob).Set(1)
-	c.executionDuration.WithLabelValues(namespace, cronjob).Set(duration)
-	c.executionsTotal.WithLabelValues(namespace, cronjob, "success").Inc()
-	c.lastSuccessTime.WithLabelValues(namespace, cronjob).Set(float64(time.Now().Unix()))
-
-	// Update success rate tracking
-	c.countsMu.Lock()
-	key := namespace + "/" + cronjob
-	c.successCounts[key]++
-	c.updateSuccessRate(namespace, cronjob)
-	c.countsMu.Unlock()
-}
-
-// RecordFailure records a failed job execution
-func (c *Collector) RecordFailure(namespace, cronjob string, duration float64) {
-	c.executionStatus.WithLabelValues(namespace, cronjob).Set(0)
-	c.executionDuration.WithLabelValues(namespace, cronjob).Set(duration)
-	c.executionsTotal.WithLabelValues(namespace, cronjob, "failed").Inc()
-	c.lastFailureTime.WithLabelValues(namespace, cronjob).Set(float64(time.Now().Unix()))
-
-	// Update success rate tracking
-	c.countsMu.Lock()
-	key := namespace + "/" + cronjob
-	c.failureCounts[key]++
-	c.updateSuccessRate(namespace, cronjob)
-	c.countsMu.Unlock()
-}
-
-// RecordMissedSchedule increments the missed schedule counter
-func (c *Collector) RecordMissedSchedule(namespace, cronjob string) {
-	c.missedSchedules.WithLabelValues(namespace, cronjob).Inc()
-}
-
-// UpdateNextSchedule updates the next expected run timestamp
-func (c *Collector) UpdateNextSchedule(namespace, cronjob string, timestamp int64) {
-	c.nextScheduleTime.WithLabelValues(namespace, cronjob).Set(float64(timestamp))
-}
-
-// UpdateActiveJobs sets the current number of active jobs
-func (c *Collector) UpdateActiveJobs(namespace, cronjob string, count int) {
-	c.activeJobs.WithLabelValues(namespace, cronjob).Set(float64(count))
-}
-
-// RecordScheduleDelay records the delay between scheduled and actual start time
-func (c *Collector) RecordScheduleDelay(namespace, cronjob string, delaySeconds float64) {
-	c.scheduleDelay.WithLabelValues(namespace, cronjob).Set(delaySeconds)
-}
-
-// updateSuccessRate recalculates the success rate (must be called with lock held)
-func (c *Collector) updateSuccessRate(namespace, cronjob string) {
-	key := namespace + "/" + cronjob
-	successes := c.successCounts[key]
-	failures := c.failureCounts[key]
-	total := successes + failures
-
-	if total == 0 {
-		c.successRate.WithLabelValues(namespace, cronjob).Set(1.0) // No executions = 100% success
-		return
-	}
-
-	rate := float64(successes) / float64(total)
-	c.successRate.WithLabelValues(namespace, cronjob).Set(rate)
+	delete(c.lastKnownSuccess, key)
+	delete(c.lastKnownFailure, key)
+	c.mu.Unlock()
 }

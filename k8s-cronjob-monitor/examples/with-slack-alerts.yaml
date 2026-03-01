@@ -1,0 +1,47 @@
+# AlertManager configuration for Slack notifications
+# Add this to your AlertManager config to receive CronJob alerts in Slack
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-slack
+  namespace: monitoring
+type: Opaque
+stringData:
+  alertmanager.yaml: |
+    global:
+      resolve_timeout: 5m
+
+    route:
+      group_by: ['alertname', 'cronjob', 'namespace']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: 'slack-notifications'
+      routes:
+        - match:
+            severity: critical
+          receiver: 'slack-critical'
+          repeat_interval: 1h
+
+    receivers:
+      - name: 'slack-notifications'
+        slack_configs:
+          - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+            channel: '#alerts'
+            title: '{{ .CommonLabels.alertname }}'
+            text: >-
+              *CronJob:* {{ .CommonLabels.cronjob }}
+              *Namespace:* {{ .CommonLabels.namespace }}
+              *Description:* {{ .CommonAnnotations.description }}
+            send_resolved: true
+
+      - name: 'slack-critical'
+        slack_configs:
+          - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+            channel: '#critical-alerts'
+            title: 'CRITICAL: {{ .CommonLabels.alertname }}'
+            text: >-
+              *CronJob:* {{ .CommonLabels.cronjob }}
+              *Namespace:* {{ .CommonLabels.namespace }}
+              *Description:* {{ .CommonAnnotations.description }}
+            send_resolved: true

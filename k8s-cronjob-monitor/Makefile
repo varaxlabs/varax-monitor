@@ -7,6 +7,10 @@ IMG ?= ghcr.io/kubeshield/k8s-cronjob-monitor:latest
 GOPATH ?= $(shell go env GOPATH)
 GOBIN ?= $(GOPATH)/bin
 
+# setup-envtest binary
+SETUP_ENVTEST ?= $(GOBIN)/setup-envtest
+ENVTEST_K8S_VERSION ?= 1.30.0
+
 .PHONY: all
 all: build
 
@@ -31,13 +35,21 @@ lint: ## Run golangci-lint
 	golangci-lint run
 
 .PHONY: test
-test: fmt vet ## Run tests
-	go test ./... -coverprofile cover.out
+test: fmt vet envtest ## Run tests
+	KUBEBUILDER_ASSETS="$(shell $(SETUP_ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(shell pwd)/testbin -p path)" \
+		go test ./... -coverprofile cover.out -race
+	@echo "Coverage:"
+	@go tool cover -func cover.out | tail -1
 
 .PHONY: test-coverage
 test-coverage: test ## Run tests with coverage report
 	go tool cover -html=cover.out -o coverage.html
 	@echo "Coverage report: coverage.html"
+
+.PHONY: test-integration
+test-integration: fmt vet envtest ## Run integration tests only
+	KUBEBUILDER_ASSETS="$(shell $(SETUP_ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(shell pwd)/testbin -p path)" \
+		go test ./pkg/controller/... -coverprofile cover.out -race -v
 
 ##@ Build
 
@@ -56,6 +68,13 @@ docker-build: ## Build docker image
 .PHONY: docker-push
 docker-push: ## Push docker image
 	docker push ${IMG}
+
+##@ Tool Dependencies
+
+.PHONY: envtest
+envtest: $(SETUP_ENVTEST) ## Download setup-envtest if necessary
+$(SETUP_ENVTEST):
+	go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 
 ##@ Deployment
 

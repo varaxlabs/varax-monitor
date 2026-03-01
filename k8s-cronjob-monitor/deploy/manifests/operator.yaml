@@ -1,0 +1,178 @@
+---
+# Source: k8s-cronjob-monitor/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-cronjob-monitor
+  labels:
+    helm.sh/chart: k8s-cronjob-monitor-0.1.0
+    app.kubernetes.io/name: k8s-cronjob-monitor
+    app.kubernetes.io/instance: k8s-cronjob-monitor
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: k8s-cronjob-monitor/templates/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-cronjob-monitor
+  labels:
+    helm.sh/chart: k8s-cronjob-monitor-0.1.0
+    app.kubernetes.io/name: k8s-cronjob-monitor
+    app.kubernetes.io/instance: k8s-cronjob-monitor
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+rules:
+  # Read CronJobs
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list", "watch"]
+
+  # Read Jobs (to track executions)
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+
+  # Read Pods (to get exit codes and status)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  # Read Pod logs (optional, for failure details)
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+# Source: k8s-cronjob-monitor/templates/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-cronjob-monitor
+  labels:
+    helm.sh/chart: k8s-cronjob-monitor-0.1.0
+    app.kubernetes.io/name: k8s-cronjob-monitor
+    app.kubernetes.io/instance: k8s-cronjob-monitor
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-cronjob-monitor
+subjects:
+  - kind: ServiceAccount
+    name: k8s-cronjob-monitor
+    namespace: monitoring
+---
+# Source: k8s-cronjob-monitor/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-cronjob-monitor
+  labels:
+    helm.sh/chart: k8s-cronjob-monitor-0.1.0
+    app.kubernetes.io/name: k8s-cronjob-monitor
+    app.kubernetes.io/instance: k8s-cronjob-monitor
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    app.kubernetes.io/name: k8s-cronjob-monitor
+    app.kubernetes.io/instance: k8s-cronjob-monitor
+---
+# Source: k8s-cronjob-monitor/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-cronjob-monitor
+  labels:
+    helm.sh/chart: k8s-cronjob-monitor-0.1.0
+    app.kubernetes.io/name: k8s-cronjob-monitor
+    app.kubernetes.io/instance: k8s-cronjob-monitor
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-cronjob-monitor
+      app.kubernetes.io/instance: k8s-cronjob-monitor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k8s-cronjob-monitor
+        app.kubernetes.io/instance: k8s-cronjob-monitor
+    spec:
+      serviceAccountName: k8s-cronjob-monitor
+      securityContext:
+        fsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: k8s-cronjob-monitor
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          image: "ghcr.io/kubeshield/k8s-cronjob-monitor:1.0.0"
+          imagePullPolicy: IfNotPresent
+          args:
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+---
+# Source: k8s-cronjob-monitor/templates/servicemonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: k8s-cronjob-monitor
+  labels:
+    helm.sh/chart: k8s-cronjob-monitor-0.1.0
+    app.kubernetes.io/name: k8s-cronjob-monitor
+    app.kubernetes.io/instance: k8s-cronjob-monitor
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+  namespaceSelector:
+    matchNames:
+      - monitoring
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-cronjob-monitor
+      app.kubernetes.io/instance: k8s-cronjob-monitor

@@ -24,3 +24,5 @@ https://github.com/kubeshield/k8s-cronjob-monitor
 ---
 Built with love by KubeShield
 https://kubeshield.io
+
+Discover more Kubernetes tools at https://kubeshield.io

@@ -43,6 +43,7 @@ All metrics use the `cronjob_monitor_` prefix:
 
 | Metric | Type | Description |
 |--------|------|-------------|
+| `cronjob_monitor_info` | Gauge | CronJob metadata (schedule, suspended) |
 | `cronjob_monitor_execution_status` | Gauge | Last execution status (1=success, 0=failed, -1=unknown) |
 | `cronjob_monitor_execution_duration_seconds` | Gauge | Duration of last execution |
 | `cronjob_monitor_executions_total` | Counter | Total executions by status |
@@ -65,11 +66,11 @@ Import our pre-built Grafana dashboards:
 
 Pre-configured Prometheus alerts for:
 
-- Failed executions
-- Missed schedules
-- Slow execution (2x average)
-- Low success rate (<80%)
-- Jobs running too long (>1 hour)
+- Failed executions (`CronJobFailed`)
+- Missed schedules (`CronJobMissedSchedule`)
+- Slow execution >1 hour (`CronJobSlowExecution`)
+- Low success rate <90% (`CronJobLowSuccessRate`)
+- No recent success in 48 hours (`CronJobNoRecentSuccess`)
 
 ```bash
 # Apply alert rules (Prometheus Operator)

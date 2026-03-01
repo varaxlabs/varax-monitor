@@ -26,8 +26,8 @@ podAnnotations: {}
 # Pod security context
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 1000
-  fsGroup: 1000
+  runAsUser: 65532
+  fsGroup: 65532
 
 # Container security context
 securityContext:
@@ -73,16 +73,25 @@ metrics:
     # Namespace for the ServiceMonitor (defaults to release namespace)
     namespace: ""
 
+# Health probe configuration
+healthProbe:
+  port: 8081
+
 # Logging configuration
 logging:
   # Log level: info, debug
   level: info
 
-# Optional: Namespace filtering
-# Only monitor CronJobs in specific namespaces
-# Leave empty to monitor all namespaces
-namespaceFilter: []
-# Example:
-# namespaceFilter:
-#   - production
-#   - staging
+# Namespace filtering
+namespaces:
+  # Only monitor CronJobs in these namespaces (empty = all)
+  include: []
+  # Exclude CronJobs in these namespaces
+  exclude: []
+
+# Schedule tracking configuration
+scheduling:
+  # Grace period before reporting a missed schedule
+  gracePeriod: 5m
+  # How often to check for missed schedules
+  checkInterval: 1m

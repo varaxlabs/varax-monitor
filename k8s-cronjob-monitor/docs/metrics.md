@@ -15,6 +15,24 @@ All metrics include these labels:
 | `namespace` | Kubernetes namespace of the CronJob |
 | `cronjob` | Name of the CronJob |
 
+## Info Gauge
+
+### cronjob_monitor_info
+
+CronJob metadata information. Always set to `1`.
+
+**Additional Labels:**
+| Label | Description |
+|-------|-------------|
+| `schedule` | Cron schedule expression |
+| `suspended` | Whether the CronJob is suspended (`true`/`false`) |
+
+**Example Query:**
+```promql
+# All monitored CronJobs with their schedules
+cronjob_monitor_info
+```
+
 ## Gauges
 
 ### cronjob_monitor_execution_status
@@ -148,16 +166,14 @@ sum(cronjob_monitor_active_jobs)
 ### Alerting Queries
 
 ```promql
-# CronJob hasn't run successfully in expected timeframe
-(time() - cronjob_monitor_last_success_timestamp) >
-(cronjob_monitor_next_schedule_timestamp - cronjob_monitor_last_success_timestamp) * 1.5
+# CronJob hasn't succeeded in 48 hours
+(time() - cronjob_monitor_last_success_timestamp) > 172800
 
-# Execution taking 2x the average
-cronjob_monitor_execution_duration_seconds >
-(avg_over_time(cronjob_monitor_execution_duration_seconds[24h]) * 2)
+# Execution taking over 1 hour
+cronjob_monitor_execution_duration_seconds > 3600
 
-# Success rate below threshold
-cronjob_monitor_success_rate < 0.8
+# Success rate below 90%
+cronjob_monitor_success_rate < 0.9
 ```
 
 ### Analysis Queries
