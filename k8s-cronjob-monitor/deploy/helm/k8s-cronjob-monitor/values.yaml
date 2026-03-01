@@ -1,0 +1,88 @@
+# Default values for k8s-cronjob-monitor
+
+# Number of replicas (1 is usually sufficient)
+replicaCount: 1
+
+image:
+  repository: ghcr.io/kubeshield/k8s-cronjob-monitor
+  pullPolicy: IfNotPresent
+  tag: ""  # Defaults to appVersion
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Create a service account
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # Name of the service account (auto-generated if not set)
+  name: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Metrics configuration
+metrics:
+  # Port for the metrics endpoint
+  port: 8080
+  # Path for the metrics endpoint
+  path: /metrics
+
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    # Enable ServiceMonitor creation
+    enabled: true
+    # Scrape interval
+    interval: 15s
+    # Additional labels for the ServiceMonitor
+    labels: {}
+    # Namespace for the ServiceMonitor (defaults to release namespace)
+    namespace: ""
+
+# Logging configuration
+logging:
+  # Log level: info, debug
+  level: info
+
+# Optional: Namespace filtering
+# Only monitor CronJobs in specific namespaces
+# Leave empty to monitor all namespaces
+namespaceFilter: []
+# Example:
+# namespaceFilter:
+#   - production
+#   - staging

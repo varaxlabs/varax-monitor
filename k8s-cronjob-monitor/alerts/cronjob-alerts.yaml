@@ -1,0 +1,90 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cronjob-monitor-alerts
+  labels:
+    app: k8s-cronjob-monitor
+    prometheus: k8s
+spec:
+  groups:
+    - name: cronjob_monitoring
+      interval: 1m
+      rules:
+        # Alert when a CronJob fails
+        - alert: CronJobFailed
+          expr: cronjob_monitor_execution_status == 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronJob {{ $labels.cronjob }} failed"
+            description: "CronJob {{ $labels.cronjob }} in namespace {{ $labels.namespace }} has failed its last execution."
+            runbook_url: "https://github.com/kubeshield/k8s-cronjob-monitor/blob/main/docs/troubleshooting.md#cronjob-failed"
+
+        # Alert when CronJob hasn't succeeded in expected time
+        - alert: CronJobNotRunning
+          expr: |
+            (time() - cronjob_monitor_last_success_timestamp) >
+            (cronjob_monitor_next_schedule_timestamp - cronjob_monitor_last_success_timestamp) * 1.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronJob {{ $labels.cronjob }} hasn't run"
+            description: "CronJob {{ $labels.cronjob }} in namespace {{ $labels.namespace }} hasn't succeeded in the expected timeframe."
+            runbook_url: "https://github.com/kubeshield/k8s-cronjob-monitor/blob/main/docs/troubleshooting.md#cronjob-not-running"
+
+        # Alert when schedule is missed
+        - alert: CronJobMissedSchedule
+          expr: increase(cronjob_monitor_missed_schedules_total[10m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronJob {{ $labels.cronjob }} missed schedule"
+            description: "CronJob {{ $labels.cronjob }} in namespace {{ $labels.namespace }} missed its scheduled execution."
+            runbook_url: "https://github.com/kubeshield/k8s-cronjob-monitor/blob/main/docs/troubleshooting.md#missed-schedule"
+
+        # Alert when success rate drops below 80%
+        - alert: CronJobLowSuccessRate
+          expr: cronjob_monitor_success_rate < 0.80
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronJob {{ $labels.cronjob }} has low success rate"
+            description: "CronJob {{ $labels.cronjob }} in namespace {{ $labels.namespace }} has success rate of {{ $value | humanizePercentage }} over the last 24 hours."
+            runbook_url: "https://github.com/kubeshield/k8s-cronjob-monitor/blob/main/docs/troubleshooting.md#low-success-rate"
+
+        # Alert when job duration increases significantly
+        - alert: CronJobSlowExecution
+          expr: |
+            cronjob_monitor_execution_duration_seconds >
+            (avg_over_time(cronjob_monitor_execution_duration_seconds[24h]) * 2)
+          for: 5m
+          labels:
+            severity: info
+          annotations:
+            summary: "CronJob {{ $labels.cronjob }} is running slow"
+            description: "CronJob {{ $labels.cronjob }} took {{ $value | humanizeDuration }}, which is 2x the 24-hour average."
+            runbook_url: "https://github.com/kubeshield/k8s-cronjob-monitor/blob/main/docs/troubleshooting.md#slow-execution"
+
+        # Alert when job runs longer than 1 hour
+        - alert: CronJobRunningTooLong
+          expr: cronjob_monitor_execution_duration_seconds > 3600
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronJob {{ $labels.cronjob }} running too long"
+            description: "CronJob {{ $labels.cronjob }} in namespace {{ $labels.namespace }} has been running for {{ $value | humanizeDuration }} (>1 hour)."
+            runbook_url: "https://github.com/kubeshield/k8s-cronjob-monitor/blob/main/docs/troubleshooting.md#running-too-long"
+
+        # Alert when there are currently active jobs (informational)
+        - alert: CronJobActive
+          expr: cronjob_monitor_active_jobs > 0
+          for: 0m
+          labels:
+            severity: info
+          annotations:
+            summary: "CronJob {{ $labels.cronjob }} is currently running"
+            description: "CronJob {{ $labels.cronjob }} in namespace {{ $labels.namespace }} has {{ $value }} active job(s)."

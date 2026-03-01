@@ -1,0 +1,18 @@
+apiVersion: v2
+name: k8s-cronjob-monitor
+description: Dead-simple CronJob monitoring for Kubernetes with Prometheus and Grafana
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - kubernetes
+  - cronjob
+  - monitoring
+  - prometheus
+  - grafana
+home: https://github.com/kubeshield/k8s-cronjob-monitor
+sources:
+  - https://github.com/kubeshield/k8s-cronjob-monitor
+maintainers:
+  - name: KubeShield
+    url: https://kubeshield.io
