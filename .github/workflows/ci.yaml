@@ -79,6 +79,7 @@ jobs:
             --namespace monitoring \
             --create-namespace \
             --set image.tag=e2e \
+            --set metrics.serviceMonitor.enabled=false \
             --wait --timeout 120s
       - name: Verify operator is running
         run: |
