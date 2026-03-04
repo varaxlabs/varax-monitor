@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in k8s-cronjob-monitor
+about: Report a bug in varax-monitor
 title: '[Bug] '
 labels: bug
 ---
@@ -26,7 +26,7 @@ What actually happened.
 ## Environment
 
 - Kubernetes version:
-- k8s-cronjob-monitor version:
+- varax-monitor version:
 - Helm chart version:
 - Prometheus version:
 

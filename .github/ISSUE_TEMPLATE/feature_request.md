@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature for k8s-cronjob-monitor
+about: Suggest a new feature for varax-monitor
 title: '[Feature] '
 labels: enhancement
 ---
