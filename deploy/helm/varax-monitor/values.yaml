@@ -28,6 +28,8 @@ podSecurityContext:
   runAsNonRoot: true
   runAsUser: 65532
   fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
 
 # Container security context
 securityContext:
@@ -36,6 +38,8 @@ securityContext:
   capabilities:
     drop:
       - ALL
+  seccompProfile:
+    type: RuntimeDefault
 
 # Resource limits and requests
 resources:
@@ -77,21 +81,3 @@ metrics:
 healthProbe:
   port: 8081
 
-# Logging configuration
-logging:
-  # Log level: info, debug
-  level: info
-
-# Namespace filtering
-namespaces:
-  # Only monitor CronJobs in these namespaces (empty = all)
-  include: []
-  # Exclude CronJobs in these namespaces
-  exclude: []
-
-# Schedule tracking configuration
-scheduling:
-  # Grace period before reporting a missed schedule
-  gracePeriod: 5m
-  # How often to check for missed schedules
-  checkInterval: 1m

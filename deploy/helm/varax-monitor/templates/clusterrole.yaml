@@ -14,13 +14,3 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch"]
-
-  # Read Pods (to get exit codes and status)
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
-
-  # Read Pod logs (optional, for failure details)
-  - apiGroups: [""]
-    resources: ["pods/log"]
-    verbs: ["get"]
