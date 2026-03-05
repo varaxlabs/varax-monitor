@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	"github.com/varaxlabs/varax-monitor/pkg/metrics"
 	"github.com/varaxlabs/varax-monitor/pkg/models"
 )
+
+const jobOwnerField = ".metadata.ownerReferences.cronjob"
 
 // CronJobReconciler reconciles CronJob objects and updates Prometheus metrics.
 type CronJobReconciler struct {
@@ -40,17 +43,22 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// List all Jobs in the namespace
+	// List only Jobs owned by this CronJob using the field index
 	var jobList batchv1.JobList
-	if err := r.List(ctx, &jobList, client.InNamespace(req.Namespace)); err != nil {
+	if err := r.List(ctx, &jobList,
+		client.InNamespace(req.Namespace),
+		client.MatchingFields{jobOwnerField: req.Name},
+	); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Filter to jobs owned by this CronJob
-	owned := filterOwnedJobs(jobList.Items, cronJob.Name, cronJob.UID)
+	// Sort most-recent-first
+	sort.Slice(jobList.Items, func(i, j int) bool {
+		return models.JobStartTime(&jobList.Items[i]).After(models.JobStartTime(&jobList.Items[j]))
+	})
 
 	// Compute status
-	status := models.ComputeStatus(&cronJob, owned)
+	status := models.ComputeStatus(&cronJob, jobList.Items)
 
 	// Update metrics
 	r.Collector.UpdateAll(status)
@@ -59,8 +67,29 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
 }
 
-// SetupWithManager registers the reconciler with the manager.
+// SetupWithManager registers the field indexer and reconciler with the manager.
 func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Index Jobs by the name of the owning CronJob so we can filter
+	// with MatchingFields instead of listing all Jobs in the namespace.
+	if err := mgr.GetFieldIndexer().IndexField(
+		context.Background(),
+		&batchv1.Job{},
+		jobOwnerField,
+		func(obj client.Object) []string {
+			job, ok := obj.(*batchv1.Job)
+			if !ok {
+				return nil
+			}
+			owner, _ := models.GetCronJobOwner(job)
+			if owner == "" {
+				return nil
+			}
+			return []string{owner}
+		},
+	); err != nil {
+		return fmt.Errorf("failed to create field index for Jobs: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&batchv1.CronJob{}).
 		Watches(&batchv1.Job{}, handler.EnqueueRequestsFromMapFunc(r.mapJobToCronJob)).
@@ -85,32 +114,4 @@ func (r *CronJobReconciler) mapJobToCronJob(ctx context.Context, obj client.Obje
 			Name:      name,
 		}},
 	}
-}
-
-// filterOwnedJobs returns jobs owned by the given CronJob, sorted most-recent-first.
-func filterOwnedJobs(jobs []batchv1.Job, cronJobName string, cronJobUID types.UID) []batchv1.Job {
-	var owned []batchv1.Job
-	for _, job := range jobs {
-		for _, ref := range job.OwnerReferences {
-			if ref.Kind == "CronJob" && ref.Name == cronJobName && ref.UID == cronJobUID {
-				owned = append(owned, job)
-				break
-			}
-		}
-	}
-
-	sort.Slice(owned, func(i, j int) bool {
-		ti := jobStartTime(&owned[i])
-		tj := jobStartTime(&owned[j])
-		return ti.After(tj)
-	})
-
-	return owned
-}
-
-func jobStartTime(job *batchv1.Job) time.Time {
-	if job.Status.StartTime != nil {
-		return job.Status.StartTime.Time
-	}
-	return job.CreationTimestamp.Time
 }
