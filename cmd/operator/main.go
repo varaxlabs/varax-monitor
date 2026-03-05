@@ -1,7 +1,7 @@
 package main
 
 import (
-	"net/http"
+	"flag"
 	"os"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -28,29 +28,35 @@ func init() {
 }
 
 func main() {
+	var metricsAddr string
+	var probeAddr string
+	var enableLeaderElection bool
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for high availability.")
+
 	opts := zap.Options{Development: false}
+	opts.BindFlags(flag.CommandLine)
+	flag.Parse()
+
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	logger := ctrl.Log.WithName("setup")
 
-	metricsCollector := metrics.NewCollector()
+	metricsCollector := metrics.NewCollectorFor(ctrlmetrics.Registry)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress: ":8080",
-			ExtraHandlers: map[string]http.Handler{
-				"/custom-metrics": metrics.NewMetricsHandler(metricsCollector),
-			},
+			BindAddress: metricsAddr,
 		},
-		HealthProbeBindAddress: ":8081",
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "varax-monitor-leader.varaxlabs.io",
 	})
 	if err != nil {
 		logger.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
-
-	// Register our custom metrics with controller-runtime's metrics registry
-	metricsCollector.RegisterWithRegistry(ctrlmetrics.Registry)
 
 	// Setup CronJob reconciler
 	reconciler := &controller.CronJobReconciler{
