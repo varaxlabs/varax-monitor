@@ -57,6 +57,16 @@ jobs:
       - name: Build Docker image
         run: docker build -t ghcr.io/varaxlabs/varax-monitor:ci .
 
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Run govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
+
   e2e:
     runs-on: ubuntu-latest
     needs: [build]

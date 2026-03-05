@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write  # Required for keyless Cosign signing via Sigstore/Fulcio
 
 jobs:
   release:
@@ -20,6 +21,9 @@ jobs:
         with:
           go-version: '1.25'
 
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -27,17 +31,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract version
+        id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          docker build -t ghcr.io/varaxlabs/varax-monitor:${VERSION} .
-          docker tag ghcr.io/varaxlabs/varax-monitor:${VERSION} ghcr.io/varaxlabs/varax-monitor:latest
-          docker push ghcr.io/varaxlabs/varax-monitor:${VERSION}
-          docker push ghcr.io/varaxlabs/varax-monitor:latest
+          echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          echo "semver=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker image
+        id: docker-push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/varaxlabs/varax-monitor:${{ steps.version.outputs.tag }}
+            ghcr.io/varaxlabs/varax-monitor:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Sign container image
+        run: |
+          cosign sign --yes \
+            ghcr.io/varaxlabs/varax-monitor@${{ steps.docker-push.outputs.digest }}
+
+      - name: Generate and attach SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/varaxlabs/varax-monitor@${{ steps.docker-push.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Attach SBOM to image
+        run: |
+          cosign attach sbom --sbom sbom.spdx.json \
+            ghcr.io/varaxlabs/varax-monitor@${{ steps.docker-push.outputs.digest }}
 
       - name: Build release binaries
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${{ steps.version.outputs.tag }}
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o varax-monitor-linux-amd64 cmd/operator/main.go
           GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o varax-monitor-linux-arm64 cmd/operator/main.go
           GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o varax-monitor-darwin-amd64 cmd/operator/main.go
@@ -45,18 +79,25 @@ jobs:
 
       - name: Package Helm chart
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          helm package deploy/helm/varax-monitor --version ${VERSION} --app-version ${VERSION}
+          helm package deploy/helm/varax-monitor \
+            --version ${{ steps.version.outputs.semver }} \
+            --app-version ${{ steps.version.outputs.semver }}
 
       - name: Push Helm chart to GHCR
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          helm push varax-monitor-${VERSION}.tgz oci://ghcr.io/varaxlabs/charts
+          helm push varax-monitor-${{ steps.version.outputs.semver }}.tgz \
+            oci://ghcr.io/varaxlabs/charts
+
+      - name: Sign Helm chart
+        run: |
+          cosign sign --yes \
+            ghcr.io/varaxlabs/charts/varax-monitor:${{ steps.version.outputs.semver }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
             varax-monitor-*
             varax-monitor-*.tgz
+            sbom.spdx.json
