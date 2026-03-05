@@ -13,9 +13,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/varaxlabs/varax-monitor/pkg/metrics"
+	"github.com/varaxlabs/varax-monitor/pkg/models"
 )
 
 func newTestReconciler(objs ...runtime.Object) (*CronJobReconciler, *metrics.Collector) {
@@ -23,7 +25,21 @@ func newTestReconciler(objs ...runtime.Object) (*CronJobReconciler, *metrics.Col
 	_ = batchv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
 
-	c := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithRuntimeObjects(objs...).
+		WithIndex(&batchv1.Job{}, jobOwnerField, func(obj client.Object) []string {
+			job, ok := obj.(*batchv1.Job)
+			if !ok {
+				return nil
+			}
+			owner, _ := models.GetCronJobOwner(job)
+			if owner == "" {
+				return nil
+			}
+			return []string{owner}
+		}).
+		Build()
 	collector := metrics.NewCollector()
 
 	return &CronJobReconciler{
@@ -55,7 +71,7 @@ func TestReconcile_CronJobCreated(t *testing.T) {
 	assert.Equal(t, 60*time.Second, result.RequeueAfter)
 
 	// Check that info metric is set
-	mfs, _ := collector.Registry.Gather()
+	mfs, _ := collector.TestRegistry.Gather()
 	foundInfo := false
 	for _, mf := range mfs {
 		if mf.GetName() == "cronjob_monitor_info" {
@@ -109,7 +125,7 @@ func TestReconcile_CronJobWithSuccessfulJob(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify success metrics
-	mfs, _ := collector.Registry.Gather()
+	mfs, _ := collector.TestRegistry.Gather()
 	for _, mf := range mfs {
 		if mf.GetName() == "cronjob_monitor_execution_status" {
 			for _, m := range mf.GetMetric() {
@@ -170,7 +186,7 @@ func TestReconcile_CronJobWithFailedJob(t *testing.T) {
 
 	require.NoError(t, err)
 
-	mfs, _ := collector.Registry.Gather()
+	mfs, _ := collector.TestRegistry.Gather()
 	for _, mf := range mfs {
 		if mf.GetName() == "cronjob_monitor_execution_status" {
 			for _, m := range mf.GetMetric() {
@@ -185,8 +201,13 @@ func TestReconcile_CronJobDeleted(t *testing.T) {
 	r, collector := newTestReconciler()
 
 	// First, set up some metrics
-	ts := metrics.TestStatus("default", "test-cj")
-	collector.UpdateAll(&ts)
+	collector.UpdateAll(&models.CronJobStatus{
+		Namespace:      "default",
+		Name:           "test-cj",
+		Schedule:       "*/5 * * * *",
+		LastExecStatus: 1,
+		SuccessCount:   1,
+	})
 
 	_, err := r.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: types.NamespacedName{Namespace: "default", Name: "test-cj"},
@@ -195,7 +216,7 @@ func TestReconcile_CronJobDeleted(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check that metrics were removed
-	mfs, _ := collector.Registry.Gather()
+	mfs, _ := collector.TestRegistry.Gather()
 	for _, mf := range mfs {
 		for _, m := range mf.GetMetric() {
 			for _, l := range m.GetLabel() {
@@ -241,4 +262,80 @@ func TestMapJobToCronJob_NoOwner(t *testing.T) {
 
 	requests := r.mapJobToCronJob(context.Background(), job)
 	assert.Empty(t, requests)
+}
+
+func TestReconcile_OnlyOwned_JobsIncluded(t *testing.T) {
+	cjUID := types.UID("cj-uid-1")
+	cj := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "test-cj",
+			UID:       cjUID,
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule: "*/5 * * * *",
+		},
+	}
+
+	now := time.Now()
+	start := metav1.NewTime(now.Add(-30 * time.Second))
+	end := metav1.NewTime(now)
+
+	// Owned job
+	ownedJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "test-cj-owned",
+			OwnerReferences: []metav1.OwnerReference{
+				{Kind: "CronJob", Name: "test-cj", UID: cjUID},
+			},
+		},
+		Status: batchv1.JobStatus{
+			StartTime:      &start,
+			CompletionTime: &end,
+			Conditions: []batchv1.JobCondition{
+				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	// Unrelated job in same namespace (different owner)
+	unrelatedJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "other-cj-123",
+			OwnerReferences: []metav1.OwnerReference{
+				{Kind: "CronJob", Name: "other-cj", UID: "other-uid"},
+			},
+		},
+		Status: batchv1.JobStatus{
+			StartTime:      &start,
+			CompletionTime: &end,
+			Conditions: []batchv1.JobCondition{
+				{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+			},
+		},
+	}
+
+	r, collector := newTestReconciler(cj, ownedJob, unrelatedJob)
+
+	_, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: "test-cj"},
+	})
+	require.NoError(t, err)
+
+	// Should show 1 success, 0 failures (unrelated job excluded by index)
+	mfs, _ := collector.TestRegistry.Gather()
+	for _, mf := range mfs {
+		if mf.GetName() == "cronjob_monitor_executions_total" {
+			for _, m := range mf.GetMetric() {
+				for _, l := range m.GetLabel() {
+					if l.GetName() == "status" && l.GetValue() == "failed" {
+						assert.Equal(t, float64(0), m.GetCounter().GetValue(),
+							"unrelated job's failure should not be counted")
+					}
+				}
+			}
+		}
+	}
 }
