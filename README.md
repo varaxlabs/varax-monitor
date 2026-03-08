@@ -1,8 +1,8 @@
-# varax-monitor
+# onax
 
-[![GitHub Stars](https://img.shields.io/github/stars/varaxlabs/varax-monitor)](https://github.com/varaxlabs/varax-monitor)
+[![GitHub Stars](https://img.shields.io/github/stars/varaxlabs/onax)](https://github.com/varaxlabs/onax)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/varaxlabs/varax-monitor)](https://goreportcard.com/report/github.com/varaxlabs/varax-monitor)
+[![Go Report Card](https://goreportcard.com/badge/github.com/varaxlabs/onax)](https://goreportcard.com/report/github.com/varaxlabs/onax)
 
 **Dead-simple CronJob monitoring for Kubernetes with Prometheus and Grafana**
 
@@ -22,12 +22,12 @@ Stop paying for SaaS CronJob monitoring. Monitor your Kubernetes CronJobs with y
 
 ```bash
 # Install from OCI registry
-helm install varax-monitor oci://ghcr.io/varaxlabs/charts/varax-monitor \
+helm install onax oci://ghcr.io/varaxlabs/charts/onax \
   --namespace monitoring \
   --create-namespace
 
 # Verify installation
-kubectl get pods -n monitoring -l app.kubernetes.io/name=varax-monitor
+kubectl get pods -n monitoring -l app.kubernetes.io/name=onax
 ```
 
 That's it! Your CronJobs are now being monitored.
@@ -71,12 +71,12 @@ Pre-configured Prometheus alerts for:
 
 ```bash
 # Apply alert rules (Prometheus Operator)
-kubectl apply -f https://raw.githubusercontent.com/varaxlabs/varax-monitor/main/alerts/cronjob-alerts.yaml
+kubectl apply -f https://raw.githubusercontent.com/varaxlabs/onax/main/alerts/cronjob-alerts.yaml
 ```
 
 ## Comparison
 
-| Feature | varax-monitor | Cronitor | Healthchecks.io | DIY Prometheus |
+| Feature | onax | Cronitor | Healthchecks.io | DIY Prometheus |
 |---------|---------------------|----------|-----------------|----------------|
 | **Cost** | **Free** | $21-449/mo | $0-80/mo | Free (20hr setup) |
 | **Setup time** | **1 command** | Manual per job | Manual per job | Hours of work |
@@ -92,7 +92,7 @@ kubectl apply -f https://raw.githubusercontent.com/varaxlabs/varax-monitor/main/
 ```yaml
 # values.yaml
 image:
-  repository: ghcr.io/varaxlabs/varax-monitor
+  repository: ghcr.io/varaxlabs/onax
   tag: v1.0.0
 
 resources:
@@ -124,8 +124,8 @@ logging:
 
 ```bash
 # Clone repository
-git clone https://github.com/varaxlabs/varax-monitor.git
-cd varax-monitor
+git clone https://github.com/varaxlabs/onax.git
+cd onax
 
 # Install dependencies
 go mod download

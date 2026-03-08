@@ -1,6 +1,6 @@
 # Metrics Reference
 
-varax-monitor exposes all metrics on the `/metrics` endpoint using the Prometheus exposition format.
+onax exposes all metrics on the `/metrics` endpoint using the Prometheus exposition format.
 
 ## Metric Prefix
 

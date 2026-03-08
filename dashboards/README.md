@@ -1,6 +1,6 @@
 # Grafana Dashboards
 
-This directory contains pre-built Grafana dashboards for varax-monitor.
+This directory contains pre-built Grafana dashboards for onax.
 
 ## Available Dashboards
 
@@ -33,14 +33,14 @@ Add to your Grafana provisioning config:
 ```yaml
 apiVersion: 1
 providers:
-  - name: 'varax-monitor'
+  - name: 'onax'
     folder: 'Kubernetes'
     type: file
     options:
-      path: /var/lib/grafana/dashboards/varax-monitor
+      path: /var/lib/grafana/dashboards/onax
 ```
 
-Then mount the dashboard JSON files to `/var/lib/grafana/dashboards/varax-monitor/`.
+Then mount the dashboard JSON files to `/var/lib/grafana/dashboards/onax/`.
 
 ### Method 3: ConfigMap
 ```bash

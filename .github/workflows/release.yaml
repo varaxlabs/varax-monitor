@@ -47,57 +47,57 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/varaxlabs/varax-monitor:${{ steps.version.outputs.tag }}
-            ghcr.io/varaxlabs/varax-monitor:latest
+            ghcr.io/varaxlabs/onax:${{ steps.version.outputs.tag }}
+            ghcr.io/varaxlabs/onax:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Sign container image
         run: |
           cosign sign --yes \
-            ghcr.io/varaxlabs/varax-monitor@${{ steps.docker-push.outputs.digest }}
+            ghcr.io/varaxlabs/onax@${{ steps.docker-push.outputs.digest }}
 
       - name: Generate and attach SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/varaxlabs/varax-monitor@${{ steps.docker-push.outputs.digest }}
+          image: ghcr.io/varaxlabs/onax@${{ steps.docker-push.outputs.digest }}
           format: spdx-json
           output-file: sbom.spdx.json
 
       - name: Attach SBOM to image
         run: |
           cosign attach sbom --sbom sbom.spdx.json \
-            ghcr.io/varaxlabs/varax-monitor@${{ steps.docker-push.outputs.digest }}
+            ghcr.io/varaxlabs/onax@${{ steps.docker-push.outputs.digest }}
 
       - name: Build release binaries
         run: |
           VERSION=${{ steps.version.outputs.tag }}
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o varax-monitor-linux-amd64 cmd/operator/main.go
-          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o varax-monitor-linux-arm64 cmd/operator/main.go
-          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o varax-monitor-darwin-amd64 cmd/operator/main.go
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o varax-monitor-darwin-arm64 cmd/operator/main.go
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o onax-linux-amd64 cmd/operator/main.go
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o onax-linux-arm64 cmd/operator/main.go
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o onax-darwin-amd64 cmd/operator/main.go
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o onax-darwin-arm64 cmd/operator/main.go
 
       - name: Package Helm chart
         run: |
-          helm package deploy/helm/varax-monitor \
+          helm package deploy/helm/onax \
             --version ${{ steps.version.outputs.semver }} \
             --app-version ${{ steps.version.outputs.semver }}
 
       - name: Push Helm chart to GHCR
         run: |
-          helm push varax-monitor-${{ steps.version.outputs.semver }}.tgz \
+          helm push onax-${{ steps.version.outputs.semver }}.tgz \
             oci://ghcr.io/varaxlabs/charts
 
       - name: Sign Helm chart
         run: |
           cosign sign --yes \
-            ghcr.io/varaxlabs/charts/varax-monitor:${{ steps.version.outputs.semver }}
+            ghcr.io/varaxlabs/charts/onax:${{ steps.version.outputs.semver }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            varax-monitor-*
-            varax-monitor-*.tgz
+            onax-*
+            onax-*.tgz
             sbom.spdx.json

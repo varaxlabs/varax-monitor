@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/varaxlabs/varax-monitor/pkg/models"
+	"github.com/varaxlabs/onax/pkg/models"
 )
 
 func getGaugeValue(g *prometheus.GaugeVec, labels ...string) float64 {

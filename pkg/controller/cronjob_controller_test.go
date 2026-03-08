@@ -16,8 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/varaxlabs/varax-monitor/pkg/metrics"
-	"github.com/varaxlabs/varax-monitor/pkg/models"
+	"github.com/varaxlabs/onax/pkg/metrics"
+	"github.com/varaxlabs/onax/pkg/models"
 )
 
 func newTestReconciler(objs ...runtime.Object) (*CronJobReconciler, *metrics.Collector) {

@@ -2,7 +2,7 @@
 
 ## Overview
 
-varax-monitor is a Kubernetes operator built with [controller-runtime](https://github.com/kubernetes-sigs/controller-runtime) that monitors CronJob resources and exposes Prometheus metrics.
+onax is a Kubernetes operator built with [controller-runtime](https://github.com/kubernetes-sigs/controller-runtime) that monitors CronJob resources and exposes Prometheus metrics.
 
 ## Components
 

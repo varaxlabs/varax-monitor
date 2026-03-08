@@ -5,7 +5,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/varaxlabs/varax-monitor/pkg/models"
+	"github.com/varaxlabs/onax/pkg/models"
 )
 
 // Collector holds all Prometheus metrics for CronJob monitoring.

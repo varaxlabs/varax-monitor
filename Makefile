@@ -1,7 +1,7 @@
-# varax-monitor Makefile
+# onax Makefile
 
 # Image URL
-IMG ?= ghcr.io/varaxlabs/varax-monitor:latest
+IMG ?= ghcr.io/varaxlabs/onax:latest
 
 # Get the currently used golang install path
 GOPATH ?= $(shell go env GOPATH)
@@ -80,17 +80,17 @@ $(SETUP_ENVTEST):
 
 .PHONY: deploy
 deploy: ## Deploy to cluster using Helm
-	helm upgrade --install varax-monitor ./deploy/helm/varax-monitor \
+	helm upgrade --install onax ./deploy/helm/onax \
 		--namespace monitoring \
 		--create-namespace
 
 .PHONY: undeploy
 undeploy: ## Remove from cluster
-	helm uninstall varax-monitor --namespace monitoring
+	helm uninstall onax --namespace monitoring
 
 .PHONY: manifests
 manifests: ## Generate raw YAML manifests from Helm
-	helm template varax-monitor ./deploy/helm/varax-monitor \
+	helm template onax ./deploy/helm/onax \
 		--namespace monitoring > deploy/manifests/operator.yaml
 
 ##@ Local Testing

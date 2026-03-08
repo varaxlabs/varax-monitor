@@ -1,10 +1,10 @@
-# Default values for varax-monitor
+# Default values for onax
 
 # Number of replicas (1 is usually sufficient)
 replicaCount: 1
 
 image:
-  repository: ghcr.io/varaxlabs/varax-monitor
+  repository: ghcr.io/varaxlabs/onax
   pullPolicy: IfNotPresent
   tag: ""  # Defaults to appVersion
 

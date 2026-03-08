@@ -31,7 +31,7 @@ EOF
     echo ""
     echo "To deploy the operator:"
     echo "  make docker-build"
-    echo "  kind load docker-image ghcr.io/varaxlabs/varax-monitor:latest --name ${CLUSTER_NAME}"
+    echo "  kind load docker-image ghcr.io/varaxlabs/onax:latest --name ${CLUSTER_NAME}"
     echo "  make deploy"
     echo ""
     echo "To deploy test CronJobs:"

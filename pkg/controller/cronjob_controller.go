@@ -16,8 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/varaxlabs/varax-monitor/pkg/metrics"
-	"github.com/varaxlabs/varax-monitor/pkg/models"
+	"github.com/varaxlabs/onax/pkg/metrics"
+	"github.com/varaxlabs/onax/pkg/models"
 )
 
 const jobOwnerField = ".metadata.ownerReferences.cronjob"

@@ -13,9 +13,9 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/varaxlabs/varax-monitor/pkg/controller"
-	"github.com/varaxlabs/varax-monitor/pkg/metrics"
-	"github.com/varaxlabs/varax-monitor/pkg/watcher"
+	"github.com/varaxlabs/onax/pkg/controller"
+	"github.com/varaxlabs/onax/pkg/metrics"
+	"github.com/varaxlabs/onax/pkg/watcher"
 )
 
 var (
@@ -51,7 +51,7 @@ func main() {
 		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "varax-monitor-leader.varaxlabs.io",
+		LeaderElectionID:       "onax-leader.varaxlabs.io",
 	})
 	if err != nil {
 		logger.Error(err, "unable to create manager")
@@ -85,7 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Info("Starting varax-monitor")
+	logger.Info("Starting onax")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Error(err, "problem running manager")
 		os.Exit(1)

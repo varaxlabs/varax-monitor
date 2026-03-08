@@ -1,4 +1,4 @@
-module github.com/varaxlabs/varax-monitor
+module github.com/varaxlabs/onax
 
 go 1.25.0
 

@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in varax-monitor
+about: Report a bug in onax
 title: '[Bug] '
 labels: bug
 ---
@@ -26,7 +26,7 @@ What actually happened.
 ## Environment
 
 - Kubernetes version:
-- varax-monitor version:
+- onax version:
 - Helm chart version:
 - Prometheus version:
 

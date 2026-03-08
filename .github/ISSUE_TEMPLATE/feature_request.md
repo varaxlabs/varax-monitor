@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature for varax-monitor
+about: Suggest a new feature for onax
 title: '[Feature] '
 labels: enhancement
 ---

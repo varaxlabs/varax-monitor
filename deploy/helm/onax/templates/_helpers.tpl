@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "varax-monitor.name" -}}
+{{- define "onax.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "varax-monitor.fullname" -}}
+{{- define "onax.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,16 +24,16 @@ Create a default fully qualified app name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "varax-monitor.chart" -}}
+{{- define "onax.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "varax-monitor.labels" -}}
-helm.sh/chart: {{ include "varax-monitor.chart" . }}
-{{ include "varax-monitor.selectorLabels" . }}
+{{- define "onax.labels" -}}
+helm.sh/chart: {{ include "onax.chart" . }}
+{{ include "onax.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -43,17 +43,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "varax-monitor.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "varax-monitor.name" . }}
+{{- define "onax.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "onax.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "varax-monitor.serviceAccountName" -}}
+{{- define "onax.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "varax-monitor.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "onax.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}

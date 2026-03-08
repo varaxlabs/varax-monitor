@@ -1,25 +1,25 @@
 ---
-# Source: varax-monitor/templates/serviceaccount.yaml
+# Source: onax/templates/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: varax-monitor
+  name: onax
   labels:
-    helm.sh/chart: varax-monitor-0.1.0
-    app.kubernetes.io/name: varax-monitor
-    app.kubernetes.io/instance: varax-monitor
+    helm.sh/chart: onax-0.1.0
+    app.kubernetes.io/name: onax
+    app.kubernetes.io/instance: onax
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 ---
-# Source: varax-monitor/templates/clusterrole.yaml
+# Source: onax/templates/clusterrole.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: varax-monitor
+  name: onax
   labels:
-    helm.sh/chart: varax-monitor-0.1.0
-    app.kubernetes.io/name: varax-monitor
-    app.kubernetes.io/instance: varax-monitor
+    helm.sh/chart: onax-0.1.0
+    app.kubernetes.io/name: onax
+    app.kubernetes.io/instance: onax
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 rules:
@@ -33,35 +33,35 @@ rules:
     resources: ["jobs"]
     verbs: ["get", "list", "watch"]
 ---
-# Source: varax-monitor/templates/clusterrolebinding.yaml
+# Source: onax/templates/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: varax-monitor
+  name: onax
   labels:
-    helm.sh/chart: varax-monitor-0.1.0
-    app.kubernetes.io/name: varax-monitor
-    app.kubernetes.io/instance: varax-monitor
+    helm.sh/chart: onax-0.1.0
+    app.kubernetes.io/name: onax
+    app.kubernetes.io/instance: onax
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: varax-monitor
+  name: onax
 subjects:
   - kind: ServiceAccount
-    name: varax-monitor
+    name: onax
     namespace: monitoring
 ---
-# Source: varax-monitor/templates/service.yaml
+# Source: onax/templates/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: varax-monitor
+  name: onax
   labels:
-    helm.sh/chart: varax-monitor-0.1.0
-    app.kubernetes.io/name: varax-monitor
-    app.kubernetes.io/instance: varax-monitor
+    helm.sh/chart: onax-0.1.0
+    app.kubernetes.io/name: onax
+    app.kubernetes.io/instance: onax
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 spec:
@@ -72,33 +72,33 @@ spec:
       protocol: TCP
       name: metrics
   selector:
-    app.kubernetes.io/name: varax-monitor
-    app.kubernetes.io/instance: varax-monitor
+    app.kubernetes.io/name: onax
+    app.kubernetes.io/instance: onax
 ---
-# Source: varax-monitor/templates/deployment.yaml
+# Source: onax/templates/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: varax-monitor
+  name: onax
   labels:
-    helm.sh/chart: varax-monitor-0.1.0
-    app.kubernetes.io/name: varax-monitor
-    app.kubernetes.io/instance: varax-monitor
+    helm.sh/chart: onax-0.1.0
+    app.kubernetes.io/name: onax
+    app.kubernetes.io/instance: onax
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: varax-monitor
-      app.kubernetes.io/instance: varax-monitor
+      app.kubernetes.io/name: onax
+      app.kubernetes.io/instance: onax
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: varax-monitor
-        app.kubernetes.io/instance: varax-monitor
+        app.kubernetes.io/name: onax
+        app.kubernetes.io/instance: onax
     spec:
-      serviceAccountName: varax-monitor
+      serviceAccountName: onax
       securityContext:
         fsGroup: 65532
         runAsNonRoot: true
@@ -106,7 +106,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: varax-monitor
+        - name: onax
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -115,7 +115,7 @@ spec:
             readOnlyRootFilesystem: true
             seccompProfile:
               type: RuntimeDefault
-          image: "ghcr.io/varaxlabs/varax-monitor:1.0.0"
+          image: "ghcr.io/varaxlabs/onax:1.0.0"
           imagePullPolicy: IfNotPresent
           args:
             - --metrics-bind-address=:8080
@@ -147,15 +147,15 @@ spec:
               cpu: 50m
               memory: 64Mi
 ---
-# Source: varax-monitor/templates/servicemonitor.yaml
+# Source: onax/templates/servicemonitor.yaml
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: varax-monitor
+  name: onax
   labels:
-    helm.sh/chart: varax-monitor-0.1.0
-    app.kubernetes.io/name: varax-monitor
-    app.kubernetes.io/instance: varax-monitor
+    helm.sh/chart: onax-0.1.0
+    app.kubernetes.io/name: onax
+    app.kubernetes.io/instance: onax
     app.kubernetes.io/version: "1.0.0"
     app.kubernetes.io/managed-by: Helm
 spec:
@@ -168,5 +168,5 @@ spec:
       - monitoring
   selector:
     matchLabels:
-      app.kubernetes.io/name: varax-monitor
-      app.kubernetes.io/instance: varax-monitor
+      app.kubernetes.io/name: onax
+      app.kubernetes.io/instance: onax

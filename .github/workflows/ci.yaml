@@ -55,7 +55,7 @@ jobs:
       - name: Build binary
         run: CGO_ENABLED=0 go build -o bin/operator cmd/operator/main.go
       - name: Build Docker image
-        run: docker build -t ghcr.io/varaxlabs/varax-monitor:ci .
+        run: docker build -t ghcr.io/varaxlabs/onax:ci .
 
   security:
     runs-on: ubuntu-latest
@@ -81,11 +81,11 @@ jobs:
           cluster_name: e2e-test
       - name: Build and load image
         run: |
-          docker build -t ghcr.io/varaxlabs/varax-monitor:e2e .
-          kind load docker-image ghcr.io/varaxlabs/varax-monitor:e2e --name e2e-test
+          docker build -t ghcr.io/varaxlabs/onax:e2e .
+          kind load docker-image ghcr.io/varaxlabs/onax:e2e --name e2e-test
       - name: Deploy operator
         run: |
-          helm install varax-monitor ./deploy/helm/varax-monitor \
+          helm install onax ./deploy/helm/onax \
             --namespace monitoring \
             --create-namespace \
             --set image.tag=e2e \
@@ -93,13 +93,13 @@ jobs:
             --wait --timeout 120s
       - name: Verify operator is running
         run: |
-          kubectl get pods -n monitoring -l app.kubernetes.io/name=varax-monitor
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=varax-monitor -n monitoring --timeout=60s
+          kubectl get pods -n monitoring -l app.kubernetes.io/name=onax
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=onax -n monitoring --timeout=60s
       - name: Deploy test CronJob
         run: kubectl apply -f examples/basic-cronjob.yaml
       - name: Check metrics endpoint
         run: |
-          kubectl port-forward -n monitoring svc/varax-monitor 8080:8080 &
+          kubectl port-forward -n monitoring svc/onax 8080:8080 &
           sleep 5
           for i in $(seq 1 12); do
             if curl -sf http://localhost:8080/metrics | grep -q cronjob_monitor; then
@@ -112,6 +112,6 @@ jobs:
           echo "Metrics output:"
           curl -sf http://localhost:8080/metrics || true
           echo "Operator logs:"
-          kubectl logs -n monitoring -l app.kubernetes.io/name=varax-monitor --tail=50 || true
+          kubectl logs -n monitoring -l app.kubernetes.io/name=onax --tail=50 || true
           echo "FAIL: cronjob_monitor metrics not found after 60s"
           exit 1
