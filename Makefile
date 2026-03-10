@@ -3,6 +3,15 @@
 # Image URL
 IMG ?= ghcr.io/varaxlabs/onax:latest
 
+# Version injection
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+DATE    ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+LDFLAGS := -s -w \
+	-X github.com/varaxlabs/onax/internal/version.Version=$(VERSION) \
+	-X github.com/varaxlabs/onax/internal/version.Commit=$(COMMIT) \
+	-X github.com/varaxlabs/onax/internal/version.Date=$(DATE)
+
 # Get the currently used golang install path
 GOPATH ?= $(shell go env GOPATH)
 GOBIN ?= $(GOPATH)/bin
@@ -55,7 +64,7 @@ test-integration: fmt vet envtest ## Run integration tests only
 
 .PHONY: build
 build: fmt vet ## Build binary
-	go build -o bin/operator cmd/operator/main.go
+	go build -ldflags '$(LDFLAGS)' -o bin/onax ./cmd/operator
 
 .PHONY: run
 run: fmt vet ## Run operator locally
@@ -63,11 +72,19 @@ run: fmt vet ## Run operator locally
 
 .PHONY: docker-build
 docker-build: ## Build docker image
-	docker build -t ${IMG} .
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg DATE=$(DATE) \
+		-t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image
 	docker push ${IMG}
+
+.PHONY: release-snapshot
+release-snapshot: ## Run GoReleaser in snapshot mode (local dry run)
+	goreleaser release --snapshot --clean
 
 ##@ Tool Dependencies
 

@@ -1,0 +1,97 @@
+version: 2
+
+builds:
+  - id: onax
+    main: ./cmd/operator
+    binary: onax
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/varaxlabs/onax/internal/version.Version={{.Version}}
+      - -X github.com/varaxlabs/onax/internal/version.Commit={{.Commit}}
+      - -X github.com/varaxlabs/onax/internal/version.Date={{.Date}}
+
+dockers:
+  - image_templates:
+      - "ghcr.io/varaxlabs/onax:{{.Version}}-amd64"
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    goarch: amd64
+  - image_templates:
+      - "ghcr.io/varaxlabs/onax:{{.Version}}-arm64"
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/varaxlabs/onax:{{.Version}}"
+    image_templates:
+      - "ghcr.io/varaxlabs/onax:{{.Version}}-amd64"
+      - "ghcr.io/varaxlabs/onax:{{.Version}}-arm64"
+  - name_template: "ghcr.io/varaxlabs/onax:latest"
+    image_templates:
+      - "ghcr.io/varaxlabs/onax:{{.Version}}-amd64"
+      - "ghcr.io/varaxlabs/onax:{{.Version}}-arm64"
+
+docker_signs:
+  - cmd: cosign
+    artifacts: manifests
+    args:
+      - "sign"
+      - "--yes"
+      - "${artifact}"
+
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    args:
+      - "sign-blob"
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+
+sboms:
+  - artifacts: archive
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^docs'
+      - '^chore'
+      - '^ci'
+
+release:
+  footer: |
+    ## Container Image
+    ```
+    docker pull ghcr.io/varaxlabs/onax:{{.Version}}
+    ```
+
+    ## Helm Chart
+    ```
+    helm pull oci://ghcr.io/varaxlabs/charts/onax --version {{.Version}}
+    ```

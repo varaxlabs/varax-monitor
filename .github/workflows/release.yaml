@@ -17,6 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
@@ -34,48 +35,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract version
         id: version
         run: |
-          echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           echo "semver=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push Docker image
-        id: docker-push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/varaxlabs/onax:${{ steps.version.outputs.tag }}
-            ghcr.io/varaxlabs/onax:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Sign container image
-        run: |
-          cosign sign --yes \
-            ghcr.io/varaxlabs/onax@${{ steps.docker-push.outputs.digest }}
-
-      - name: Generate and attach SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: ghcr.io/varaxlabs/onax@${{ steps.docker-push.outputs.digest }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-
-      - name: Attach SBOM to image
-        run: |
-          cosign attach sbom --sbom sbom.spdx.json \
-            ghcr.io/varaxlabs/onax@${{ steps.docker-push.outputs.digest }}
-
-      - name: Build release binaries
-        run: |
-          VERSION=${{ steps.version.outputs.tag }}
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o onax-linux-amd64 cmd/operator/main.go
-          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o onax-linux-arm64 cmd/operator/main.go
-          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o onax-darwin-amd64 cmd/operator/main.go
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o onax-darwin-arm64 cmd/operator/main.go
 
       - name: Package Helm chart
         run: |
@@ -93,11 +64,9 @@ jobs:
           cosign sign --yes \
             ghcr.io/varaxlabs/charts/onax:${{ steps.version.outputs.semver }}
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            onax-*
-            onax-*.tgz
-            sbom.spdx.json
+      - name: Upload Helm chart to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} \
+            onax-${{ steps.version.outputs.semver }}.tgz

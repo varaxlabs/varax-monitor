@@ -10,6 +10,19 @@ permissions:
   contents: read
 
 jobs:
+  commitlint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --save-dev @commitlint/{cli,config-conventional}
+      - run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -53,7 +66,7 @@ jobs:
         with:
           go-version: '1.25'
       - name: Build binary
-        run: CGO_ENABLED=0 go build -o bin/operator cmd/operator/main.go
+        run: CGO_ENABLED=0 go build -o bin/onax ./cmd/operator
       - name: Build Docker image
         run: docker build -t ghcr.io/varaxlabs/onax:ci .
 
